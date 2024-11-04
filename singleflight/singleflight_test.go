@@ -53,7 +53,7 @@ func TestPanicErrorUnwrap(t *testing.T) {
 
 			var recovered interface{}
 
-			group := &Group{}
+			group := &Group[string]{}
 
 			func() {
 				defer func() {
@@ -61,7 +61,7 @@ func TestPanicErrorUnwrap(t *testing.T) {
 					t.Logf("after panic(%#v) in group.Do, recovered %#v", tc.panicValue, recovered)
 				}()
 
-				_, _, _ = group.Do(tc.name, func() (interface{}, error) {
+				_, _, _ = group.Do(tc.name, func() (string, error) {
 					panic(tc.panicValue)
 				})
 			}()
@@ -83,8 +83,8 @@ func TestPanicErrorUnwrap(t *testing.T) {
 }
 
 func TestDo(t *testing.T) {
-	var g Group
-	v, err, _ := g.Do("key", func() (interface{}, error) {
+	var g Group[string]
+	v, err, _ := g.Do("key", func() (string, error) {
 		return "bar", nil
 	})
 	if got, want := fmt.Sprintf("%v (%T)", v, v), "bar (string)"; got != want {
@@ -96,25 +96,25 @@ func TestDo(t *testing.T) {
 }
 
 func TestDoErr(t *testing.T) {
-	var g Group
+	var g Group[string]
 	someErr := errors.New("Some error")
-	v, err, _ := g.Do("key", func() (interface{}, error) {
-		return nil, someErr
+	v, err, _ := g.Do("key", func() (string, error) {
+		return "", someErr
 	})
 	if err != someErr {
 		t.Errorf("Do error = %v; want someErr %v", err, someErr)
 	}
-	if v != nil {
-		t.Errorf("unexpected non-nil value %#v", v)
+	if v != "" {
+		t.Errorf("unexpected empty value %#v", v)
 	}
 }
 
 func TestDoDupSuppress(t *testing.T) {
-	var g Group
+	var g Group[string]
 	var wg1, wg2 sync.WaitGroup
 	c := make(chan string, 1)
 	var calls int32
-	fn := func() (interface{}, error) {
+	fn := func() (string, error) {
 		if atomic.AddInt32(&calls, 1) == 1 {
 			// First invocation.
 			wg1.Done()
@@ -140,7 +140,7 @@ func TestDoDupSuppress(t *testing.T) {
 				t.Errorf("Do error: %v", err)
 				return
 			}
-			if s, _ := v.(string); s != "bar" {
+			if v != "bar" {
 				t.Errorf("Do = %T %v; want %q", v, v, "bar")
 			}
 		}()
@@ -158,7 +158,7 @@ func TestDoDupSuppress(t *testing.T) {
 // Test that singleflight behaves correctly after Forget called.
 // See https://github.com/golang/go/issues/31420
 func TestForget(t *testing.T) {
-	var g Group
+	var g Group[int]
 
 	var (
 		firstStarted  = make(chan struct{})
@@ -167,7 +167,7 @@ func TestForget(t *testing.T) {
 	)
 
 	go func() {
-		g.Do("key", func() (i interface{}, e error) {
+		g.Do("key", func() (i int, e error) {
 			close(firstStarted)
 			<-unblockFirst
 			close(firstFinished)
@@ -178,7 +178,7 @@ func TestForget(t *testing.T) {
 	g.Forget("key")
 
 	unblockSecond := make(chan struct{})
-	secondResult := g.DoChan("key", func() (i interface{}, e error) {
+	secondResult := g.DoChan("key", func() (i int, e error) {
 		<-unblockSecond
 		return 2, nil
 	})
@@ -186,7 +186,7 @@ func TestForget(t *testing.T) {
 	close(unblockFirst)
 	<-firstFinished
 
-	thirdResult := g.DoChan("key", func() (i interface{}, e error) {
+	thirdResult := g.DoChan("key", func() (i int, e error) {
 		return 3, nil
 	})
 
@@ -199,8 +199,8 @@ func TestForget(t *testing.T) {
 }
 
 func TestDoChan(t *testing.T) {
-	var g Group
-	ch := g.DoChan("key", func() (interface{}, error) {
+	var g Group[string]
+	ch := g.DoChan("key", func() (string, error) {
 		return "bar", nil
 	})
 
@@ -218,8 +218,8 @@ func TestDoChan(t *testing.T) {
 // Test singleflight behaves correctly after Do panic.
 // See https://github.com/golang/go/issues/41133
 func TestPanicDo(t *testing.T) {
-	var g Group
-	fn := func() (interface{}, error) {
+	var g Group[string]
+	fn := func() (string, error) {
 		panic("invalid memory address or nil pointer dereference")
 	}
 
@@ -255,10 +255,10 @@ func TestPanicDo(t *testing.T) {
 }
 
 func TestGoexitDo(t *testing.T) {
-	var g Group
-	fn := func() (interface{}, error) {
+	var g Group[string]
+	fn := func() (string, error) {
 		runtime.Goexit()
-		return nil, nil
+		return "", nil
 	}
 
 	const n = 5
@@ -309,8 +309,8 @@ func TestPanicDoChan(t *testing.T) {
 			recover()
 		}()
 
-		g := new(Group)
-		ch := g.DoChan("", func() (interface{}, error) {
+		g := new(Group[string])
+		ch := g.DoChan("", func() (string, error) {
 			panic("Panicking in DoChan")
 		})
 		<-ch
@@ -346,12 +346,12 @@ func TestPanicDoSharedByDoChan(t *testing.T) {
 		blocked := make(chan struct{})
 		unblock := make(chan struct{})
 
-		g := new(Group)
+		g := new(Group[string])
 		go func() {
 			defer func() {
 				recover()
 			}()
-			g.Do("", func() (interface{}, error) {
+			g.Do("", func() (string, error) {
 				close(blocked)
 				<-unblock
 				panic("Panicking in Do")
@@ -359,7 +359,7 @@ func TestPanicDoSharedByDoChan(t *testing.T) {
 		}()
 
 		<-blocked
-		ch := g.DoChan("", func() (interface{}, error) {
+		ch := g.DoChan("", func() (string, error) {
 			panic("DoChan unexpectedly executed callback")
 		})
 		close(unblock)
@@ -392,14 +392,14 @@ func TestPanicDoSharedByDoChan(t *testing.T) {
 }
 
 func ExampleGroup() {
-	g := new(Group)
+	g := new(Group[string])
 
 	block := make(chan struct{})
-	res1c := g.DoChan("key", func() (interface{}, error) {
+	res1c := g.DoChan("key", func() (string, error) {
 		<-block
 		return "func 1", nil
 	})
-	res2c := g.DoChan("key", func() (interface{}, error) {
+	res2c := g.DoChan("key", func() (string, error) {
 		<-block
 		return "func 2", nil
 	})
