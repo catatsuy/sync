@@ -11,7 +11,7 @@ import (
 	"errors"
 	"testing"
 
-	"golang.org/x/sync/errgroup"
+	"github.com/catatsuy/sync/errgroup"
 )
 
 func TestCancelCause(t *testing.T) {

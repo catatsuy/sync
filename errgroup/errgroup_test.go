@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/sync/errgroup"
+	"github.com/catatsuy/sync/errgroup"
 )
 
 var (

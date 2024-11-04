@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"golang.org/x/sync/syncmap"
+	"github.com/catatsuy/sync/syncmap"
 )
 
 type bench struct {
