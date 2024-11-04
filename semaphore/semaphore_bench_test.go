@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"testing"
 
-	"golang.org/x/sync/semaphore"
+	"github.com/catatsuy/sync/semaphore"
 )
 
 // weighted is an interface matching a subset of *Weighted.  It allows
